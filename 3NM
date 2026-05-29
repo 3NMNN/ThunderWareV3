@@ -403,7 +403,7 @@ local RevertCactusButton = Tab:CreateButton({
  local player = Players.LocalPlayer
  
  -- ==========================================
- -- 🔔 建立發送通知的函數
+ -- 🔔 알림을 보내는 기능을 구축하세요
  -- ==========================================
  local function sendNotif(title, text, duration)
      pcall(function()
@@ -416,30 +416,30 @@ local RevertCactusButton = Tab:CreateButton({
  end
  
  -- ==========================================
- -- 🔄 開關控制邏輯 (利用全局變數 _G)
+ -- 🔄 스위치 제어 로직 (전역 변수 사용) _G)
  -- ==========================================
  if _G.CactusAutoJumpEnabled then
-     -- 如果已經開啟，執行這段來關閉
+     -- 이미 활성화되어 있는 경우 이 명령어를 실행하여 비활성화하십시오
      _G.CactusAutoJumpEnabled = false
      
-     -- 斷開所有之前綁定的觸碰事件
+     -- 이전에 연결된 모든 터치 이벤트를 연결 해제합니다
      if _G.CactusConnections then
          for _, conn in pairs(_G.CactusConnections) do
              conn:Disconnect()
          end
-         _G.CactusConnections = {} -- 清空紀錄
+         _G.CactusConnections = {} -- 기록을 삭제하세요
      end
      
-     sendNotif("🛑 腳本停用", "仙人掌自動跳躍已關閉！", 3)
-     return -- 結束腳本，不往下執行
+     sendNotif("🛑 스크립트가 비활성화됨", "선인장의 자동 점프 기능이 꺼졌습니다!", 3)
+     return -- 스크립트를 종료하고 실행을 중지합니다
  end
  
- -- 如果是第一次執行或已關閉，則初始化並準備開啟
+ -- 처음 실행되는 경우이거나 시스템이 종료된 경우 시스템이 초기화되고 시작 준비를 합니다
  _G.CactusAutoJumpEnabled = true
  _G.CactusConnections = {}
  
  -- ==========================================
- -- 🌵 1. 核心系統：找出仙人掌最高的 Part
+ -- 🌵 1. 핵심 시스템: 가장 키가 큰 선인장을 찾으세요 Part
  -- ==========================================
  local function getHighestPart(cactus)
      local highestPart = nil
@@ -464,15 +464,15 @@ local RevertCactusButton = Tab:CreateButton({
  end
  
  -- ==========================================
- -- 🏃 2. 掃描並綁定「觸碰即跳躍」事件
+ -- 🏃 2. 터치하여 점프" 이벤트를 스캔하고 바인딩합니다
  -- ==========================================
- local debounce = false -- 防連跳冷卻開關
+ local debounce = false -- 역류 방지 냉각 스위치
  
  local function setupCactusAutoJump()
      local gameFolder = workspace:FindFirstChild("Game")
      if not gameFolder then 
-         sendNotif("⚠️ 掃描失敗", "找不到 Game 資料夾", 5)
-         _G.CactusAutoJumpEnabled = false -- 失敗則把狀態改回關閉
+         sendNotif("⚠️ 스캔 실패", "찾을 수 없습니다 Game 자료 폴더", 5)
+         _G.CactusAutoJumpEnabled = false -- 실패하면 상태를 다시 꺼짐으로 변경
          return 
      end
      
@@ -481,7 +481,7 @@ local RevertCactusButton = Tab:CreateButton({
          and gameFolder.Map.Parts:FindFirstChild("ImmovableProps")
          
      if not propsFolder then 
-         sendNotif("⚠️ 掃描失敗", "找不到 ImmovableProps 資料夾", 5)
+         sendNotif("⚠️ 스캔 실패", "찾을 수 없습니다 ImmovableProps 접는 사람", 5)
          _G.CactusAutoJumpEnabled = false
          return 
      end
@@ -496,7 +496,7 @@ local RevertCactusButton = Tab:CreateButton({
              if highestPart then
                  count = count + 1
                  
-                 -- 將事件存入 connection 變數，以便日後中斷
+                 -- 이벤트를 저장하세요 connection 미래에 개입할 수 있도록 변수를 설정합니다
                  local connection = highestPart.Touched:Connect(function(hit)
                      if debounce then return end 
                      
@@ -509,7 +509,7 @@ local RevertCactusButton = Tab:CreateButton({
                              debounce = true 
                              task.wait(0.1)
                              
-                             -- 強制改狀態 + Jump 指令
+                             -- 강제적인 신분 변경 + Jump 지침
                              humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
                              humanoid.Jump = true
                              
@@ -520,7 +520,7 @@ local RevertCactusButton = Tab:CreateButton({
                      end
                  end)
                  
-                 -- 把這條連線存到全局清單中
+                 -- 이 연결을 전역 목록에 저장하세요
                  table.insert(_G.CactusConnections, connection)
              end
          end
@@ -537,7 +537,7 @@ local RevertCactusButton = Tab:CreateButton({
  -- ==========================================
  -- ▶️ 執行設定
  -- ==========================================
- sendNotif("🏃 腳本啟用", "開始掃描地圖...", 3)
+ sendNotif("🏃 스크립트 활성화", "맵 스캔을 시작합니다...", 3)
  setupCactusAutoJump()
 
  loadstring(game:HttpGet("https://raw.githubusercontent.com/E5alR9/E5s/refs/heads/main/cacbhop"))() 
