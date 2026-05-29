@@ -1,0 +1,1097 @@
+
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+local Window = Rayfield:CreateWindow({
+   Name = "ThunderWare  v2",
+   Icon = 0, -- Icon in Topbar. Can use Lucide Icons (string) or Roblox Image (number). 0 to use no icon (default).
+   LoadingTitle = "ThunderWare  v2",
+   LoadingSubtitle = "by 3NMNN",
+   ShowText = "Rayfield", -- for mobile users to unhide Rayfield, change if you'd like
+   Theme = "Ocean", -- Check https://docs.sirius.menu/rayfield/configuration/themes
+
+   ToggleUIKeybind = "K", -- The keybind to toggle the UI visibility (string like "K" or Enum.KeyCode)
+
+   DisableRayfieldPrompts = false,
+   DisableBuildWarnings = false, -- Prevents Rayfield from emitting warnings when the script has a version mismatch with the interface.
+
+   -- ScriptID = "sid_xxxxxxxxxxxx", -- Your Script ID from developer.sirius.menu — enables analytics, managed keys, and script hosting
+
+   ConfigurationSaving = {
+      Enabled = true,
+      FolderName = nil, -- Create a custom folder for your hub/game
+      FileName = "Big Hub"
+   },
+
+   Discord = {
+      Enabled = false, -- Prompt the user to join your Discord server if their executor supports it
+      Invite = "noinvitelink", -- The Discord invite code, do not include Discord.gg/. E.g. Discord.gg/ABCD would be ABCD
+      RememberJoins = true -- Set this to false to make them join the Discord every time they load it up
+   },
+
+   KeySystem = false, -- 已修正：大寫 False 改為小寫 false
+   KeySettings = {
+      Title = "key for soliware hub",
+      Subtitle = "get key from discord",
+      Note = "https://discord.gg/QAbTjZvck", -- Use this to tell the user how to get a key
+      FileName = "Key soliware", -- It is recommended to use something unique, as other scripts using Rayfield may overwrite your key file
+      SaveKey = false, -- The user's key will be saved, but if you change the key, they will be unable to use your script
+      GrabKeyFromSite = false, -- If this is true, set Key below to the RAW site you would like Rayfield to get the key from
+      Key = {"nmnn- jc6g3-2jd-ggdf2jhg"} -- List of keys that the system will accept, can be RAW file links (pastebin, github, etc.) or simple strings ("hello", "key22")
+   }
+})
+
+local Tab = Window:CreateTab("Main", nil) -- Title, Image
+local Section = Tab:CreateSection("movement")
+
+local Slider = Tab:CreateSlider({
+   Name = "Air strafe speed",
+   Range = {1, 700},
+   Increment = 1,
+   Suffix = "speed",
+   CurrentValue = 16,
+   Flag = "Speed", -- A flag is the identifier for the configuration file; make sure every element has a different flag if you're using configuration saving to ensure no overlaps
+   Callback = function(Value)
+   game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = Value
+   game.Players.LocalPlayer.Character.HumanoidRootPart.Velocity = Vector3.new(Value, game.Players.LocalPlayer.Character.HumanoidRootPart.Velocity.y, Value)
+   end,
+})
+
+local Slider = Tab:CreateSlider({
+   Name = "Virtual strafe",
+   Range = {0, 2000},
+   Increment = 1,
+   Suffix = "strafe",
+   CurrentValue = 16,
+   Flag = "VirtualStrafeSetting", -- A flag is the identifier for the configuration file; make sure every element has a different flag if you're using configuration saving to ensure no overlaps
+   Callback = function(Value)
+    game.Players.LocalPlayer.Character.HumanoidRootPart.Velocity = Vector3.new(Value, game.Players.LocalPlayer.Character.HumanoidRootPart.Velocity.y, Value)
+
+   end,
+})
+
+local Section = Tab:CreateSection("Other")
+
+
+local Toggle = Tab:CreateToggle({
+   Name = "Bounce Spot Visualizer",
+   CurrentValue = false,
+   Flag = "Toggle1", -- A flag is the identifier for the configuration file; make sure every element has a different flag if you're using configuration saving to ensure no overlaps
+   Callback = function(Value)
+   -- The function that takes place when the toggle is pressed
+   -- The variable (Value) is a boolean on whether the toggle is true or false
+   end,
+})
+
+--// Cleaner Evade Bounce Spot Visualizer
+--// Softer red so spots are easier to see
+--// Toggle = B
+
+local Workspace = game:GetService("Workspace")
+local UIS = game:GetService("UserInputService")
+
+-- SETTINGS
+local TOGGLE_KEY = Enum.KeyCode.B
+
+local REFRESH_TIME = 8
+local MAX_PARTS = 500
+
+local MIN_ANGLE = 0.15
+local MAX_ANGLE = 0.92
+
+local enabled = false
+
+local folder = Instance.new("Folder")
+folder.Name = "BounceVisualizer"
+folder.Parent = Workspace
+
+local visuals = {}
+
+-- CLEAR
+local function clearESP()
+
+    for _,v in pairs(visuals) do
+        if v then
+            v:Destroy()
+        end
+    end
+
+    table.clear(visuals)
+end
+
+-- DETECT BOUNCEABLE PARTS
+local function isBounceSpot(part)
+
+    if not part:IsA("BasePart") then
+        return false
+    end
+
+    if part.Size.Magnitude < 6 then
+        return false
+    end
+
+    if not part.CanCollide then
+        return false
+    end
+
+    if part.Transparency > 0.7 then
+        return false
+    end
+
+    local y = math.abs(part.CFrame.UpVector.Y)
+
+    return y > MIN_ANGLE and y < MAX_ANGLE
+end
+
+-- CREATE CLEANER VISUAL
+local function createESP(part)
+
+    -- SOFT RED OVERLAY
+    local box = Instance.new("BoxHandleAdornment")
+    box.Adornee = part
+    box.AlwaysOnTop = true
+    box.ZIndex = 10
+    box.Size = part.Size + Vector3.new(0.05,0.05,0.05)
+
+    -- DARKER RED
+    box.Color3 = Color3.fromRGB(180, 40, 40)
+
+    -- MORE TRANSPARENT
+    box.Transparency = 0.65
+
+    box.Parent = folder
+
+    -- THIN OUTLINE
+    local outline = Instance.new("SelectionBox")
+    outline.Adornee = part
+
+    outline.LineThickness = 0.03
+    outline.Color3 = Color3.fromRGB(255,255,255)
+
+    outline.SurfaceTransparency = 1
+
+    outline.Parent = folder
+
+    table.insert(visuals, box)
+    table.insert(visuals, outline)
+end
+
+-- SCAN
+local function scan()
+
+    clearESP()
+
+    if not enabled then
+        return
+    end
+
+    local count = 0
+
+    for _,part in ipairs(Workspace:GetDescendants()) do
+
+        if count >= MAX_PARTS then
+            break
+        end
+
+        if isBounceSpot(part) then
+
+            createESP(part)
+
+            count += 1
+        end
+    end
+end
+
+-- TOGGLE
+UIS.InputBegan:Connect(function(input, gp)
+
+    if gp then
+        return
+    end
+
+    if input.KeyCode == TOGGLE_KEY then
+
+        enabled = not enabled
+
+        if enabled then
+            scan()
+            print("Bounce Visualizer ON")
+        else
+            clearESP()
+            print("Bounce Visualizer OFF")
+        end
+    end
+end)
+
+-- AUTO REFRESH
+task.spawn(function()
+
+    while true do
+
+        task.wait(REFRESH_TIME)
+
+        if enabled then
+            scan()
+        end
+    end
+end)
+
+print("Loaded Cleaner Bounce Visualizer")
+print("Press B to toggle")
+
+
+
+
+
+
+
+
+
+
+
+
+local easyBounceEnabled = false
+local easyBounceConnection = nil
+local easyBounceLast = 0
+local easyBouncePower = 70
+local easyBounceToggleKey = "H"
+local easyBounceBindConnection = nil
+
+local easyBounceToggle = function(enable)
+   easyBounceEnabled = enable
+   print("Easy bounce " .. (easyBounceEnabled and "enabled" or "disabled"))
+
+   if easyBounceConnection then
+      easyBounceConnection:Disconnect()
+      easyBounceConnection = nil
+   end
+
+   if not easyBounceEnabled then
+      return
+   end
+
+   local wasAirborne = false
+   easyBounceConnection = game:GetService("RunService").Heartbeat:Connect(function()
+      local player = game.Players.LocalPlayer
+      local char = player and player.Character
+      local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+      local hrp = char and char:FindFirstChild("HumanoidRootPart")
+      if not humanoid or not hrp then
+         return
+      end
+
+      local state = humanoid:GetState()
+      local isAirborne = state == Enum.HumanoidStateType.Freefall or state == Enum.HumanoidStateType.Jumping or state == Enum.HumanoidStateType.FallingDown
+      local isGrounded = humanoid.FloorMaterial ~= Enum.Material.Air
+
+      if isAirborne then
+         wasAirborne = true
+      end
+
+      if not isGrounded then
+         return
+      end
+
+      if not wasAirborne then
+         return
+      end
+
+      local moveDir = humanoid.MoveDirection
+      if moveDir.Magnitude < 0.2 then
+         return
+      end
+
+      -- Evade legacy bounce: trigger on landing after airborne movement
+      local now = tick()
+      if now - easyBounceLast < 0.25 then
+         return
+      end
+      easyBounceLast = now
+      wasAirborne = false
+
+      humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+      local horizVelocity = moveDir.Unit * easyBouncePower
+      hrp.Velocity = Vector3.new(horizVelocity.X, 72, horizVelocity.Z)
+   end)
+end
+
+local easyBounceKeybind = Tab:CreateKeybind({
+   Name = "Easy bounce key",
+   CurrentKeybind = easyBounceToggleKey,
+   HoldToInteract = false,
+   Flag = "EasyBounceKeybind",
+   Callback = function(Key)
+      easyBounceToggleKey = tostring(Key):gsub("Enum.KeyCode.", "")
+   end,
+})
+
+local easyBouncePowerSlider = Tab:CreateSlider({
+   Name = "Bounce power",
+   Range = {20, 150},
+   Increment = 1,
+   Suffix = "power",
+   CurrentValue = easyBouncePower,
+   Flag = "EasyBouncePower",
+   Callback = function(Value)
+      easyBouncePower = Value
+   end,
+})
+
+local Keybind = Tab:CreateButton({
+   Name = "Easy bounce",
+   HoldToInteract = false,
+   Flag = "Keybind1", -- A flag is the identifier for the configuration file. Make sure every element has a different flag if you're using configuration saving to ensure no overlaps
+   Callback = function()
+      easyBounceToggle(not easyBounceEnabled)
+   end,
+})
+
+easyBounceBindConnection = game:GetService("UserInputService").InputBegan:Connect(function(input, gameProcessed)
+   if gameProcessed then
+      return
+   end
+   if input.UserInputType ~= Enum.UserInputType.Keyboard then
+      return
+   end
+   if input.KeyCode.Name == easyBounceToggleKey then
+      easyBounceToggle(not easyBounceEnabled)
+   end
+end)
+
+local Button = Tab:CreateButton({
+   Name = "Cactus hitbox expander",
+   Callback = function()
+   print("Expanding cactus hitboxes...")
+      for _, cactus in pairs(game.Workspace:GetDescendants()) do
+         if cactus.Name:lower():find("cactus") and cactus:IsA("BasePart") then
+            cactus.Size = Vector3.new(10, 10, 10) -- Increase hitbox size
+         end
+      end
+   end,
+})
+
+local Players = game:GetService("Players")
+local StarterGui = game:GetService("StarterGui")
+local player = Players.LocalPlayer
+
+-- ==========================================
+-- 🔔 建立發送通知的函數
+-- ==========================================
+local function sendNotif(title, text, duration)
+    pcall(function()
+        StarterGui:SetCore("SendNotification", {
+            Title = title;
+            Text = text;
+            Duration = duration or 5;
+        })
+    end)
+end
+
+-- ==========================================
+-- 🔄 開關控制邏輯 (利用全局變數 _G)
+-- ==========================================
+if _G.CactusAutoJumpEnabled then
+    -- 如果已經開啟，執行這段來關閉
+    _G.CactusAutoJumpEnabled = false
+    
+    -- 斷開所有之前綁定的觸碰事件
+    if _G.CactusConnections then
+        for _, conn in pairs(_G.CactusConnections) do
+            conn:Disconnect()
+        end
+        _G.CactusConnections = {} -- 清空紀錄
+    end
+    
+    sendNotif("🛑 腳本停用", "仙人掌自動跳躍已關閉！", 3)
+    return -- 結束腳本，不往下執行
+end
+
+-- 如果是第一次執行或已關閉，則初始化並準備開啟
+_G.CactusAutoJumpEnabled = true
+_G.CactusConnections = {}
+
+-- ==========================================
+-- 🌵 1. 核心系統：找出仙人掌最高的 Part
+-- ==========================================
+local function getHighestPart(cactus)
+    local highestPart = nil
+    local maxTopY = -math.huge 
+
+    if cactus:IsA("BasePart") then
+        highestPart = cactus
+        maxTopY = cactus.Position.Y + (cactus.Size.Y / 2)
+    end
+
+    for _, desc in pairs(cactus:GetDescendants()) do
+        if desc:IsA("BasePart") then
+            local topY = desc.Position.Y + (desc.Size.Y / 2)
+            if topY > maxTopY then
+                maxTopY = topY
+                highestPart = desc
+            end
+        end
+    end
+    
+    return highestPart
+end
+
+-- ==========================================
+-- 🏃 2. 掃描並綁定「觸碰即跳躍」事件
+-- ==========================================
+local debounce = false -- 防連跳冷卻開關
+
+local function setupCactusAutoJump()
+    local gameFolder = workspace:FindFirstChild("Game")
+    if not gameFolder then 
+        sendNotif("⚠️ 掃描失敗", "找不到 Game 資料夾", 5)
+        _G.CactusAutoJumpEnabled = false -- 失敗則把狀態改回關閉
+        return 
+    end
+    
+    local propsFolder = gameFolder:FindFirstChild("Map") 
+        and gameFolder.Map:FindFirstChild("Parts") 
+        and gameFolder.Map.Parts:FindFirstChild("ImmovableProps")
+        
+    if not propsFolder then 
+        sendNotif("⚠️ 掃描失敗", "找不到 ImmovableProps 資料夾", 5)
+        _G.CactusAutoJumpEnabled = false
+        return 
+    end
+
+    local count = 0
+
+    for _, obj in pairs(propsFolder:GetChildren()) do
+        if obj.Name == "Cactus1" or obj.Name == "Cactus2" then
+            
+            local highestPart = getHighestPart(obj)
+            
+            if highestPart then
+                count = count + 1
+                
+                -- 將事件存入 connection 變數，以便日後中斷
+                local connection = highestPart.Touched:Connect(function(hit)
+                    if debounce then return end 
+                    
+                    local character = player.Character
+                    if character and hit:IsDescendantOf(character) then
+                        local humanoid = character:FindFirstChild("Humanoid")
+                        local hrp = character:FindFirstChild("HumanoidRootPart")
+                        
+                        if humanoid and hrp then
+                            debounce = true 
+                            task.wait(0.1)
+                            
+                            -- 強制改狀態 + Jump 指令
+                            humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+                            humanoid.Jump = true
+                            
+                        
+                            
+                            debounce = false
+                        end
+                    end
+                end)
+                
+                -- 把這條連線存到全局清單中
+                table.insert(_G.CactusConnections, connection)
+            end
+        end
+    end
+    
+    if count > 0 then
+        sendNotif("🌵 스캔 완료", "성공은 " .. count .. " 점프에 묶인 선인장！", 5)
+    else
+        sendNotif("❓ 스캔 완료", "적합한 선인장을 찾을 수 없습니다。", 5)
+        _G.CactusAutoJumpEnabled = false
+    end
+end
+
+-- ==========================================
+-- ▶️ 執行設定
+-- ==========================================
+sendNotif("🏃 腳本啟用", "開始掃描地圖...", 3)
+setupCactusAutoJump()
+
+local Section = Tab:CreateSection("Auto")
+
+local autoFarmEnabled = false
+local autoFarmConnection = nil
+
+local Toggle = Tab:CreateToggle({
+   Name = " Auto Farm",
+   CurrentValue = false,
+   Flag = "AutoFarm",
+   Callback = function(Value)
+      autoFarmEnabled = Value
+      print("Evade Auto Farm " .. (Value and "enabled" or "disabled"))
+      
+      if Value then
+         if autoFarmConnection then
+            autoFarmConnection:Disconnect()
+         end
+         
+         autoFarmConnection = game:GetService("RunService").Heartbeat:Connect(function()
+            if not autoFarmEnabled then
+               return
+            end
+            
+            local player = game.Players.LocalPlayer
+            if not player or not player.Character then
+               return
+            end
+            
+            local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
+            if not humanoidRootPart then
+               return
+            end
+            
+            -- Check all players for downed state
+            for _, targetPlayer in pairs(game.Players:GetPlayers()) do
+               if targetPlayer ~= player and targetPlayer.Character then
+                  local targetHumanoid = targetPlayer.Character:FindFirstChild("Humanoid")
+                  local targetHRP = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+                  
+                  -- Check if player is downed (health > 0 but in downed state)
+                  if targetHumanoid and targetHRP and targetHumanoid.Health > 0 then
+                     -- Look for downed animation or state
+                     local isDown = targetHumanoid:GetState() == Enum.HumanoidStateType.Landed or 
+                                   (targetPlayer.Character:FindFirstChild("Humanoid") and 
+                                    targetPlayer.Character.Humanoid:GetState() == Enum.HumanoidStateType.GettingUp)
+                     
+                     if isDown or (targetHumanoid.Health < targetHumanoid.MaxHealth * 0.3) then
+                        -- Teleport to downed player
+                        humanoidRootPart.CFrame = targetHRP.CFrame + Vector3.new(5, 0, 0)
+                        
+                        -- Attempt to revive by interacting
+                        local reviveEvent = game:FindFirstChild("Remotes") or game.ReplicatedStorage:FindFirstChild("Remotes")
+                        if reviveEvent then
+                           local revive = reviveEvent:FindFirstChild("Revive")
+                           if revive then
+                              revive:FireServer(targetPlayer)
+                           end
+                        end
+                        
+                        wait(0.5)
+                        break
+                     end
+                  end
+               end
+            end
+         end)
+      else
+         if autoFarmConnection then
+            autoFarmConnection:Disconnect()
+            autoFarmConnection = nil
+         end
+         print("Auto Farm stopped")
+      end
+   end,
+})
+
+local Slider = Tab:CreateSlider({
+   Name = "Auto Farm Range",
+   Range = {10, 500},
+   Increment = 10,
+   Suffix = "studs",
+   CurrentValue = 100,
+   Flag = "AutoFarmRange",
+   Callback = function(Value)
+   end,
+})
+
+local Button = Tab:CreateButton({
+   Name = "Manual Revive",
+   Callback = function()
+      local player = game.Players.LocalPlayer
+      local nearestDown = nil
+      local closestDistance = 100
+      
+      for _, targetPlayer in pairs(game.Players:GetPlayers()) do
+         if targetPlayer ~= player and targetPlayer.Character then
+            local targetHRP = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if targetHRP then
+               local distance = (player.Character.HumanoidRootPart.Position - targetHRP.Position).Magnitude
+               if distance < closestDistance then
+                  closestDistance = distance
+                  nearestDown = targetPlayer
+               end
+            end
+         end
+      end
+      
+      if nearestDown then
+         print("Reviving " .. nearestDown.Name)
+         player.Character.HumanoidRootPart.CFrame = nearestDown.Character.HumanoidRootPart.CFrame + Vector3.new(5, 0, 0)
+      end
+   end,
+})
+
+local Section = Tab:CreateSection("full bright")
+
+local Button = Tab:CreateButton({
+   Name = "Full brightness",
+   Callback = function()
+   game:GetService ("Lighting").Brightness = 10
+   end,
+})
+
+local Button = Tab:CreateButton({
+   Name = "Fog Skybox",
+   Callback = function()
+      local lighting = game:GetService("Lighting")
+      local sky = lighting:FindFirstChild("Sky")
+      
+      -- Remove existing sky if present
+      if sky then
+         sky:Destroy()
+      end
+      
+      -- Create new sky instance
+      sky = Instance.new("Sky")
+      sky.Parent = lighting
+      
+      -- Set fog skybox textures
+      sky.SkyboxBk = "rbxasset://textures/sky/sky512_bk.png"
+      sky.SkyboxDn = "rbxasset://textures/sky/sky512_dn.png"
+      sky.SkyboxFt = "rbxasset://textures/sky/sky512_ft.png"
+      sky.SkyboxLf = "rbxasset://textures/sky/sky512_lf.png"
+      sky.SkyboxRt = "rbxasset://textures/sky/sky512_rt.png"
+      sky.SkyboxUp = "rbxasset://textures/sky/sky512_up.png"
+      
+      -- Remove old atmosphere if exists
+      for _, obj in pairs(lighting:GetChildren()) do
+         if obj:IsA("Atmosphere") then
+            obj:Destroy()
+         end
+      end
+      
+      -- Add fog atmosphere
+      local atmosphere = Instance.new("Atmosphere")
+      atmosphere.Density = 0.5
+      atmosphere.Color = Color3.fromRGB(170, 180, 190)
+      atmosphere.Glare = 0.2
+      atmosphere.Parent = lighting
+      
+      -- Adjust lighting for fog
+      lighting.Ambient = Color3.fromRGB(160, 170, 180)
+      lighting.OutdoorAmbient = Color3.fromRGB(160, 170, 180)
+      lighting.Brightness = 1.2
+      lighting.ClockTime = 14
+      
+      print("Fog skybox applied!")
+      Rayfield:Notify({
+         Title = "Skybox Applied",
+         Content = "Fog skybox has been applied successfully",
+         Duration = 3,
+         Image = 17279797387
+      })
+   end,
+})
+
+local Button = Tab:CreateButton({
+   Name = "Clear Skybox",
+   Callback = function()
+      local lighting = game:GetService("Lighting")
+      
+      -- Remove sky
+      local sky = lighting:FindFirstChild("Sky")
+      if sky then
+         sky:Destroy()
+      end
+      
+      -- Remove atmosphere
+      for _, obj in pairs(lighting:GetChildren()) do
+         if obj:IsA("Atmosphere") then
+            obj:Destroy()
+         end
+      end
+      
+      -- Reset lighting
+      lighting.Ambient = Color3.fromRGB(200, 200, 200)
+      lighting.OutdoorAmbient = Color3.fromRGB(200, 200, 200)
+      lighting.Brightness = 2
+      
+      print("Skybox cleared!")
+      Rayfield:Notify({
+         Title = "Skybox Cleared",
+         Content = "Skybox has been removed",
+         Duration = 3,
+         Image = 4483362458,
+      })
+   end,
+})
+
+local Section = Tab:CreateSection("Custom script")
+
+local virtualStrafeEnabled = false
+local virtualStrafeConnection = nil
+local virtualStrafeLastCamera = nil
+
+local Button = Tab:CreateButton({
+   Name = "Virtual Strafe",
+   Callback = function()
+      virtualStrafeEnabled = not virtualStrafeEnabled
+      print("Virtual strafe " .. (virtualStrafeEnabled and "enabled" or "disabled"))
+
+      if virtualStrafeEnabled then
+         if virtualStrafeConnection then
+            virtualStrafeConnection:Disconnect()
+            virtualStrafeConnection = nil
+         end
+
+         virtualStrafeLastCamera = workspace.CurrentCamera and workspace.CurrentCamera.CFrame
+         virtualStrafeConnection = game:GetService("RunService").RenderStepped:Connect(function()
+            local player = game.Players.LocalPlayer
+            local char = player and player.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            local camera = workspace.CurrentCamera
+
+            if not hrp or not camera or not virtualStrafeLastCamera then
+               virtualStrafeLastCamera = camera and camera.CFrame
+               return
+            end
+
+            local currentLook = camera.CFrame.LookVector
+            local lastLook = virtualStrafeLastCamera.LookVector
+            local dot = math.clamp(currentLook:Dot(lastLook), -1, 1)
+            local yawDelta = math.acos(dot)
+            local boost = math.clamp(yawDelta * 180, 0, 320)
+
+            if boost > 0.2 then
+               local boostVector = Vector3.new(currentLook.X, 0, currentLook.Z) * boost
+               hrp.Velocity = Vector3.new(hrp.Velocity.X + boostVector.X, hrp.Velocity.Y, hrp.Velocity.Z + boostVector.Z)
+            end
+
+            virtualStrafeLastCamera = camera.CFrame
+         end)
+      else
+         if virtualStrafeConnection then
+            virtualStrafeConnection:Disconnect()
+            virtualStrafeConnection = nil
+         end
+         virtualStrafeLastCamera = nil
+      end
+   end,
+})
+
+
+
+
+
+
+local Tab = Window:CreateTab("Visuals", nil) -- Title, Image
+
+-- Store variables 
+local ownedEmote = ""
+local wantedEmote = ""
+local ownedCosmetic = ""
+local wantedCosmetic = ""
+
+local Section = Tab:CreateSection("Emote swapper")
+
+local Input = Tab:CreateInput({
+   Name = "Owned emote",
+   CurrentValue = "",
+   PlaceholderText = "enter owned emote here",
+   RemoveTextAfterFocusLost = false,
+   Flag = "OwnedEmote",
+   Callback = function(Text)
+   ownedEmote = Text
+   print("owned emote: " .. Text)
+   end,
+})
+
+local Section = Tab:CreateSection("Swapper")
+
+local Input = Tab:CreateInput({
+   Name = "Wanted emote",
+   CurrentValue = "",
+   PlaceholderText = "enter Wanted emote here",
+   RemoveTextAfterFocusLost = false,
+   Flag = "WantedEmote",
+   Callback = function(Text)
+   wantedEmote = Text
+   -- 保留原本呼叫伺服器的邏輯
+   game:GetService("ReplicatedStorage").Remotes.PlayEmote:FireServer(Text)
+   print ("wanted emote: " .. Text)
+   end,
+})
+
+local Section = Tab:CreateSection("Swap emotes")
+
+local Button = Tab:CreateButton({
+   Name = "Apply emote changer",
+   Callback = function()
+   print ("Apply emote changer")
+   
+   if ownedEmote and ownedEmote ~= "" and wantedEmote and wantedEmote ~= "" then
+       local success, err = pcall(function()
+           -- 備份原有的已擁有動作，防止名字衝突（可選，但建議保留）
+           local ownedObj = game:GetService("ReplicatedStorage").Items.Emotes:FindFirstChild(ownedEmote)
+           if ownedObj then
+               ownedObj.Name = ownedEmote .. "_Backup"
+           end
+           
+           -- 使用你要求的指定絕對路徑改法 [使用中括號可避免名稱內含空格的問題]
+           game:GetService("ReplicatedStorage").Items.Emotes[wantedEmote].Name = ownedEmote
+       end)
+       
+       if success then
+           Rayfield:Notify({Title = "Success", Content = "Emote swapped successfully!", Duration = 3})
+       else
+           Rayfield:Notify({Title = "Error", Content = "Failed: " .. tostring(err), Duration = 3})
+       end
+   else
+       Rayfield:Notify({Title = "Info", Content = "Please fill in both emote fields!", Duration = 3})
+   end
+   end,
+})
+
+local Section = Tab:CreateSection("Cosmetic changer")
+
+local Input = Tab:CreateInput({
+   Name = "Owned cosmetic",
+   CurrentValue = "",
+   PlaceholderText = "ToxicInferno",
+   RemoveTextAfterFocusLost = false,
+   Flag = "OwnedCosmetic",
+   Callback = function(Text)
+   ownedCosmetic = Text
+   end,
+})
+
+local Input = Tab:CreateInput({
+   Name = "Wanted cosmetic",
+   CurrentValue = "",
+   PlaceholderText = "Broom",
+   RemoveTextAfterFocusLost = false,
+   Flag = "WantedCosmetic",
+   Callback = function(Text)
+   wantedCosmetic = Text
+   end,
+})
+
+local Button = Tab:CreateButton({
+   Name = "Apply cosmetic ",
+   Callback = function()
+   
+   if ownedCosmetic ~= "" and wantedCosmetic ~= "" then
+       local success, err = pcall(function()
+           -- 備份原有的外觀
+           local ownedObj = game:GetService("ReplicatedStorage").Items.Cosmetics:FindFirstChild(ownedCosmetic)
+           if ownedObj then
+               ownedObj.Name = ownedCosmetic .. "_Backup"
+           end
+           
+           -- 使用你要求的指定絕對路徑改法
+           game:GetService("ReplicatedStorage").Items.Cosmetics[wantedCosmetic].Name = ownedCosmetic
+       end)
+       
+       if success then
+           Rayfield:Notify({Title = "Success", Content = "Cosmetic swapped successfully!", Duration = 3})
+       else
+           Rayfield:Notify({Title = "Error", Content = "Failed to rename: " .. tostring(err), Duration = 3})
+       end
+   else
+       Rayfield:Notify({Title = "Info", Content = "Please fill in both cosmetic fields!", Duration = 3})
+   end
+   end,
+})
+
+local Section = Tab:CreateSection("Headless")
+
+local Button = Tab:CreateButton({
+   Name = "Get Headless",
+   Callback = function()
+      local player = game.Players.LocalPlayer
+      if not player or not player.Character then
+         return
+      end
+
+      local head = player.Character:FindFirstChild("Head")
+      if not head then
+         return
+      end
+
+      head.Transparency = 1
+      head.CanCollide = false
+
+      for _, descendant in ipairs(head:GetDescendants()) do
+         if descendant:IsA("Decal") or descendant:IsA("Texture") then
+            descendant.Transparency = 1
+         end
+      end
+
+      local face = head:FindFirstChild("face")
+      if face then
+         face.Transparency = 1
+      end
+   end,
+})
+
+local Slider = Tab:CreateSlider({
+   Name = "Fov changer",
+   Range = {0, 200},
+   Increment = 10,
+   Suffix = "slider",
+   CurrentValue = 200,
+   Flag = "FovChangerSetting", -- A flag is the identifier for the configuration file; make sure every element has a different flag if you're using configuration saving to ensure no overlaps
+   Callback = function(Value)
+   game.Workspace.CurrentCamera.FieldOfView = Value 
+   end,
+})
+
+local Button = Tab:CreateButton({
+   Name = "Fps boost",
+   Callback = function()
+   print ("Fps boost")
+   if game:GetService("RunService"):IsStudio() then
+return end
+   end,
+})
+
+local Button = Tab:CreateButton({
+   Name = "fast graphics",
+   Callback = function()
+  game:GetService("RunService"):Set3dRenderingEnabled(true)
+  print ("fast graphics")
+  settings().Rendering.QualityLevel = 1
+   end,
+})
+
+
+loadstring(game:HttpGet("https://raw.githubusercontent.com/E5alR9/E5s/refs/heads/main/donwedslide"))()
+
+local Tab = Window:CreateTab("Maps", nil)
+
+local Section = Tab:CreateSection("Custom map loader")
+
+local InsertService = game:GetService("InsertService")
+local Players = game:GetService("Players")
+
+local player = Players.LocalPlayer
+
+local mapIdInput = ""
+
+local Input = Tab:CreateInput({
+   Name = "Map ID",
+   CurrentValue = "",
+   PlaceholderText = "Enter asset ID",
+   RemoveTextAfterFocusLost = false,
+   Flag = "MapIdInput",
+
+   Callback = function(Text)
+      mapIdInput = Text
+   end,
+})
+
+local Button = Tab:CreateButton({
+   Name = "Apply map",
+   Callback = function()
+      local player = Players.LocalPlayer
+      if not player or not player.Character then
+         Rayfield:Notify({Title = "Error", Content = "Player not ready", Duration = 3})
+         return
+      end
+
+      local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+      if not hrp then
+         Rayfield:Notify({Title = "Error", Content = "HumanoidRootPart not found", Duration = 3})
+         return
+      end
+
+      local id = tonumber(mapIdInput) or tonumber(tostring(mapIdInput):match("(%d+)"))
+      if not id then
+         Rayfield:Notify({Title = "Error", Content = "Invalid map ID", Duration = 3})
+         return
+      end
+
+      -- Teleport player high so the map will spawn beneath them
+      local upOffset = 500
+      hrp.CFrame = CFrame.new(hrp.Position.X, hrp.Position.Y + upOffset, hrp.Position.Z)
+      Rayfield:Notify({Title = "Map", Content = "Teleporting up and loading map...", Duration = 2})
+
+      local ok, asset = pcall(function()
+         return InsertService:LoadAsset(id)
+      end)
+
+      if not ok or not asset then
+         Rayfield:Notify({Title = "Error", Content = "Failed to load asset", Duration = 4})
+         return
+      end
+
+      -- Find the main model inside the returned asset
+      local mapModel = nil
+      for _, obj in ipairs(asset:GetChildren()) do
+         if obj:IsA("Model") then
+            mapModel = obj
+            break
+         elseif obj:IsA("BasePart") then
+            -- wrap single-part assets into a model
+            mapModel = Instance.new("Model")
+            obj.Parent = mapModel
+            break
+         end
+      end
+      if not mapModel then
+         -- fallback to parenting the whole asset as the model
+         mapModel = Instance.new("Model")
+         for _, obj in ipairs(asset:GetChildren()) do
+            obj.Parent = mapModel
+         end
+      end
+
+      mapModel.Name = "SpawnedMap"
+      mapModel.Parent = workspace
+
+      -- Compute bounding box to determine height and pivot
+      local successBBox, bboxCFrame, bboxSize = pcall(function()
+         return mapModel:GetBoundingBox()
+      end)
+
+      local boxCFrame = bboxCFrame
+      local boxSize = bboxSize
+      if not successBBox or not boxCFrame or not boxSize then
+         -- fallback: compute axis-aligned bounds from parts
+         local minX, minY, minZ = math.huge, math.huge, math.huge
+         local maxX, maxY, maxZ = -math.huge, -math.huge, -math.huge
+         local partsCount = 0
+         for _, p in ipairs(mapModel:GetDescendants()) do
+            if p:IsA("BasePart") then
+               partsCount = partsCount + 1
+               local pos = p.Position
+               local half = p.Size * 0.5
+               minX = math.min(minX, pos.X - half.X)
+               minY = math.min(minY, pos.Y - half.Y)
+               minZ = math.min(minZ, pos.Z - half.Z)
+               maxX = math.max(maxX, pos.X + half.X)
+               maxY = math.max(maxY, pos.Y + half.Y)
+               maxZ = math.max(maxZ, pos.Z + half.Z)
+            end
+         end
+
+         if partsCount > 0 then
+            boxSize = Vector3.new(maxX - minX, maxY - minY, maxZ - minZ)
+            boxCFrame = CFrame.new((minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2)
+         else
+            boxSize = Vector3.new(0, 0, 0)
+            boxCFrame = CFrame.new(0, 0, 0)
+         end
+      end
+
+      -- Place the map so its top sits a small gap below the player's HRP
+      local gap = 5
+      local topHalf = (boxSize and boxSize.Y or 0) / 2
+      local targetY = hrp.Position.Y - gap - topHalf
+      local targetPos = Vector3.new(hrp.Position.X, targetY, hrp.Position.Z)
+
+      -- Move all parts by the offset from the model's current center to the target position
+      local offset = targetPos - boxCFrame.Position
+      for _, part in ipairs(mapModel:GetDescendants()) do
+         if part:IsA("BasePart") then
+            part.CFrame = part.CFrame + offset
+         end
+      end
+
+      Rayfield:Notify({Title = "Map", Content = "Map applied under player", Duration = 3})
+   end,
+})
+
