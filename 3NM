@@ -631,120 +631,77 @@ local RevertCactusButton = Tab:CreateButton({
 
  loadstring(game:HttpGet("https://raw.githubusercontent.com/E5alR9/E5s/refs/heads/main/cacbhop"))() 
  
- local Section = Tab:CreateSection("Auto")
- 
- local autoFarmEnabled = false
- local autoFarmConnection = nil
- 
- local Toggle = Tab:CreateToggle({
-    Name = " Auto Farm",
-    CurrentValue = false,
-    Flag = "AutoFarm",
-    Callback = function(Value)
-       autoFarmEnabled = Value
-       print("Evade Auto Farm " .. (Value and "enabled" or "disabled"))
-       
-       if Value then
-          if autoFarmConnection then
-             autoFarmConnection:Disconnect()
-          end
-          
-          autoFarmConnection = game:GetService("RunService").Heartbeat:Connect(function()
-             if not autoFarmEnabled then
-                return
-             end
-             
-             local player = game.Players.LocalPlayer
-             if not player or not player.Character then
-                return
-             end
-             
-             local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
-             if not humanoidRootPart then
-                return
-             end
-             
-             -- Check all players for downed state
-             for _, targetPlayer in pairs(game.Players:GetPlayers()) do
-                if targetPlayer ~= player and targetPlayer.Character then
-                   local targetHumanoid = targetPlayer.Character:FindFirstChild("Humanoid")
-                   local targetHRP = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
-                   
-                   -- Check if player is downed (health > 0 but in downed state)
-                   if targetHumanoid and targetHRP and targetHumanoid.Health > 0 then
-                      -- Look for downed animation or state
-                      local isDown = targetHumanoid:GetState() == Enum.HumanoidStateType.Landed or 
-                                    (targetPlayer.Character:FindFirstChild("Humanoid") and 
-                                     targetPlayer.Character.Humanoid:GetState() == Enum.HumanoidStateType.GettingUp)
-                      
-                      if isDown or (targetHumanoid.Health < targetHumanoid.MaxHealth * 0.3) then
-                         -- Teleport to downed player
-                         humanoidRootPart.CFrame = targetHRP.CFrame + Vector3.new(5, 0, 0)
-                         
-                         -- Attempt to revive by interacting
-                         local reviveEvent = game:FindFirstChild("Remotes") or game.ReplicatedStorage:FindFirstChild("Remotes")
-                         if reviveEvent then
-                            local revive = reviveEvent:FindFirstChild("Revive")
-                            if revive then
-                               revive:FireServer(targetPlayer)
-                            end
-                         end
-                         
-                         wait(0.5)
-                         break
-                      end
-                   end
-                end
-             end
-          end)
+ local Section = Tab:CreateSection("Walls+skybox")
+
+local Button = Tab:CreateButton({
+   Name = "Remove walls",
+   Callback = function()
+       -- Safely disable invisible walls. Stores original values so this can be reverted.
+       _G.InvisibleWallsOriginals = _G.InvisibleWallsOriginals or {}
+       local processed = 0
+
+       local function isPartFromMap(part)
+           if not part then return false end
+           if workspace:FindFirstChild("SpawnedMap") and part:IsDescendantOf(workspace.SpawnedMap) then
+               return true
+           end
+           if workspace:FindFirstChild("Map") and part:IsDescendantOf(workspace.Map) then
+               return true
+           end
+           if workspace:FindFirstChild("Game") and part:IsDescendantOf(workspace.Game) then
+               return true
+           end
+           return false
+       end
+
+       local function disablePart(part)
+           if not part or not part:IsA("BasePart") then return end
+           if isPartFromMap(part) then
+               return
+           end
+           if not _G.InvisibleWallsOriginals[part] then
+               _G.InvisibleWallsOriginals[part] = {CanCollide = part.CanCollide, Transparency = part.Transparency}
+           end
+           pcall(function()
+               part.CanCollide = false
+               part.Transparency = 0.5
+           end)
+           processed = processed + 1
+       end
+
+       local wallsFolder = workspace:FindFirstChild("InvisibleWalls")
+       if wallsFolder then
+           for _, w in ipairs(wallsFolder:GetDescendants()) do
+               disablePart(w)
+           end
        else
-          if autoFarmConnection then
-             autoFarmConnection:Disconnect()
-             autoFarmConnection = nil
-          end
-          print("Auto Farm stopped")
+           -- fallback: search for likely invisible walls (high transparency and collide)
+           for _, obj in ipairs(workspace:GetDescendants()) do
+               if obj:IsA("BasePart") then
+                   local nameLower = (obj.Name or ""):lower()
+                   local isLikely = false
+                   if nameLower:find("invis") or nameLower:find("invisible") then
+                       isLikely = true
+                   elseif obj.Transparency >= 0.8 and obj.CanCollide then
+                       isLikely = true
+                   end
+
+                   if isLikely then
+                       disablePart(obj)
+                   end
+               end
+           end
        end
-    end,
- })
+
+       Rayfield:Notify({Title = "Walls", Content = "Processed " .. processed .. " parts (CanCollide disabled)", Duration = 4})
+   end,
+})
+
  
- local Slider = Tab:CreateSlider({
-    Name = "Auto Farm Range",
-    Range = {10, 500},
-    Increment = 10,
-    Suffix = "studs",
-    CurrentValue = 100,
-    Flag = "AutoFarmRange",
-    Callback = function(Value)
-    end,
- })
  
- local Button = Tab:CreateButton({
-    Name = "Manual Revive",
-    Callback = function()
-       local player = game.Players.LocalPlayer
-       local nearestDown = nil
-       local closestDistance = 100
-       
-       for _, targetPlayer in pairs(game.Players:GetPlayers()) do
-          if targetPlayer ~= player and targetPlayer.Character then
-             local targetHRP = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
-             if targetHRP then
-                local distance = (player.Character.HumanoidRootPart.Position - targetHRP.Position).Magnitude
-                if distance < closestDistance then
-                   closestDistance = distance
-                   nearestDown = targetPlayer
-                end
-             end
-          end
-       end
-       
-       if nearestDown then
-          print("Reviving " .. nearestDown.Name)
-          player.Character.HumanoidRootPart.CFrame = nearestDown.Character.HumanoidRootPart.CFrame + Vector3.new(5, 0, 0)
-       end
-    end,
- })
- 
+
+
+
  local Section = Tab:CreateSection("Fun")
  
  
@@ -1331,7 +1288,7 @@ local RevertCactusButton = Tab:CreateButton({
  
  loadstring(game:HttpGet("https://raw.githubusercontent.com/E5alR9/E5s/refs/heads/main/donwedslide"))()
  
- local Tab = Window:CreateTab("Maps", nil)
+ 
  
  local Section = Tab:CreateSection("Custom map loader")
  
