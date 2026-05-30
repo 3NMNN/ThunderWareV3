@@ -20,13 +20,6 @@
        FolderName = nil, -- Create a custom folder for your hub/game
        FileName = "Big Hub"
     },
- 
-    Discord = {
-       Enabled = false, -- Prompt the user to join your Discord server if their executor supports it
-       Invite = "noinvitelink", -- The Discord invite code, do not include Discord.gg/. E.g. Discord.gg/ABCD would be ABCD
-       RememberJoins = true -- Set this to false to make them join the Discord every time they load it up
-    },
- 
     KeySystem = false, -- 已修正：大寫 False 改為小寫 false
     KeySettings = {
        Title = "key for soliware hub",
@@ -38,7 +31,7 @@
        Key = {"nmnn- jc6g3-2jd-ggdf2jhg"} -- List of keys that the system will accept, can be RAW file links (pastebin, github, etc.) or simple strings ("hello", "key22")
     }
  })
- 
+
  local Tab = Window:CreateTab("Main", nil) -- Title, Image
  local Section = Tab:CreateSection("movement")
  
@@ -56,7 +49,11 @@
     Flag = "Speed", -- A flag is the identifier for the configuration file; make sure every element has a different flag if you're using configuration saving to ensure no overlaps
     Callback = function(Value)
     airStrafeSpeed = Value
-    game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = Value
+     pcall(function()
+         local pl = game.Players.LocalPlayer
+         local hum = pl and pl.Character and pl.Character:FindFirstChild("Humanoid")
+         if hum then hum.WalkSpeed = Value end
+     end)
     end,
  })
  
@@ -117,6 +114,80 @@
 
  
  local Section = Tab:CreateSection("Other")
+
+ -- Y-lock Surf: lock player's Y position for smooth surf movement
+local yLockEnabled = false
+local yLockConnection = nil
+local yLockTarget = 0
+local yLockOffset = 0
+
+local YLockToggle = Tab:CreateToggle({
+    Name = "Y-lock Surf",
+    CurrentValue = yLockEnabled,
+    Flag = "YLockSurf",
+    Callback = function(Value)
+        yLockEnabled = Value
+
+        if yLockConnection then
+            yLockConnection:Disconnect()
+            yLockConnection = nil
+        end
+
+        if not yLockEnabled then
+            Rayfield:Notify({Title = "Y-lock", Content = "Disabled", Duration = 2})
+            return
+        end
+
+        local RunService = game:GetService("RunService")
+        local Players = game:GetService("Players")
+        local player = Players.LocalPlayer
+        local hrp = player and player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            yLockTarget = hrp.Position.Y
+        end
+
+        yLockConnection = RunService.RenderStepped:Connect(function()
+            local character = player and player.Character
+            if not character then return end
+            local hrp = character:FindFirstChild("HumanoidRootPart")
+            if not hrp then return end
+
+            local pos = hrp.Position
+            local desiredY = yLockTarget + (yLockOffset or 0)
+
+            hrp.CFrame = CFrame.new(pos.X, desiredY, pos.Z)
+            hrp.Velocity = Vector3.new(hrp.Velocity.X, 0, hrp.Velocity.Z)
+        end)
+
+        Rayfield:Notify({Title = "Y-lock", Content = "Enabled (Y="..tostring(math.floor(yLockTarget))..")", Duration = 2})
+    end,
+})
+
+local YLockOffsetSlider = Tab:CreateSlider({
+    Name = "Y Lock Offset",
+    Range = {-200, 200},
+    Increment = 1,
+    Suffix = "offset",
+    CurrentValue = yLockOffset,
+    Flag = "YLockOffset",
+    Callback = function(Value)
+        yLockOffset = Value
+    end,
+})
+
+local YLockSetButton = Tab:CreateButton({
+    Name = "Set Y to current",
+    Callback = function()
+        local player = game:GetService("Players").LocalPlayer
+        local hrp = player and player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            yLockTarget = hrp.Position.Y
+            Rayfield:Notify({Title = "Y-lock", Content = "Locked Y = "..tostring(math.floor(yLockTarget)), Duration = 3})
+        else
+            Rayfield:Notify({Title = "Y-lock", Content = "Player not ready", Duration = 3})
+        end
+    end,
+})
 
 
  local Toggle = Tab:CreateToggle({
@@ -290,150 +361,29 @@ player.CharacterAdded:Connect(setupCharacter)
  end
  
  -- TOGGLE
- UIS.InputBegan:Connect(function(input, gp)
- 
-     if gp then
-         return
+UIS.InputBegan:Connect(function(input, gp)
+     if gp then return end
+     if input.KeyCode ~= TOGGLE_KEY then return end
+
+     enabled = not enabled
+     if enabled then
+          sendNotif("🔍 Bounce Visualizer", "Enabled", 2)
+          -- run scan immediately and then periodically
+          scan()
+          spawn(function()
+                while enabled do
+                     task.wait(REFRESH_TIME)
+                     if enabled then scan() end
+                end
+          end)
+     else
+          clearESP()
+          sendNotif("🔍 Bounce Visualizer", "Disabled", 2)
      end
+end)
+    
  
-     if input.KeyCode == TOGGLE_KEY then
- 
-         enabled = not enabled
- 
-         if enabled then
-             scan()
-             print("Bounce Visualizer ON")
-         else
-             clearESP()
-             print("Bounce Visualizer OFF")
-         end
-     end
- end)
- 
- -- AUTO REFRESH
- task.spawn(function()
- 
-     while true do
- 
-         task.wait(REFRESH_TIME)
- 
-         if enabled then
-             scan()
-         end
-     end
- end)
- 
- print("Loaded Cleaner Bounce Visualizer")
- print("Press B to toggle")
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
-local easyBounceEnabled = false
-local easyBounceConnection = nil
-local easyBounceLast = 0
-local easyBouncePower = 150
-local easyBounceToggleKey = "H"
-local easyBounceBindConnection = nil
 
-local function doLegacyLegMove(character)
-    if not character then
-        return
-    end
-
-    local originals = {}
-    local function rotateJoint(name, angle)
-        local joint = character:FindFirstChild(name)
-        if joint and joint:IsA("Motor6D") then
-            originals[name] = joint.C0
-            joint.C0 = joint.C0 * CFrame.Angles(angle, 0, 0)
-        end
-    end
-
-    rotateJoint("LeftHip", -0.8)
-    rotateJoint("RightHip", -0.8)
-    rotateJoint("Left Hip", -0.8)
-    rotateJoint("Right Hip", -0.8)
-
-    task.delay(0.12, function()
-        for name, original in pairs(originals) do
-            local joint = character:FindFirstChild(name)
-            if joint and joint:IsA("Motor6D") and original then
-                joint.C0 = original
-            end
-        end
-    end)
-end
-
-local easyBounceToggle = function(enable)
-    easyBounceEnabled = enable
-    print("Easy bounce " .. (easyBounceEnabled and "enabled" or "disabled"))
- 
-    if easyBounceConnection then
-       easyBounceConnection:Disconnect()
-       easyBounceConnection = nil
-    end
- 
-    if not easyBounceEnabled then
-       return
-    end
- 
-    local wasAirborne = false
-    easyBounceConnection = game:GetService("RunService").Heartbeat:Connect(function()
-       local player = game.Players.LocalPlayer
-       local char = player and player.Character
-       local humanoid = char and char:FindFirstChildOfClass("Humanoid")
-       local hrp = char and char:FindFirstChild("HumanoidRootPart")
-       if not humanoid or not hrp then
-          return
-       end
- 
-       local state = humanoid:GetState()
-       local isAirborne = state == Enum.HumanoidStateType.Freefall or state == Enum.HumanoidStateType.Jumping or state == Enum.HumanoidStateType.FallingDown
-       local isGrounded = humanoid.FloorMaterial ~= Enum.Material.Air
- 
-       if isAirborne then
-          wasAirborne = true
-       end
- 
-       if not isGrounded then
-          return
-       end
- 
-       if not wasAirborne then
-          return
-       end
- 
-       local moveDir = humanoid.MoveDirection
-       if moveDir.Magnitude < 0.2 then
-          return
-       end
- 
-       -- Evade legacy bounce: trigger on landing after airborne movement
-       local now = tick()
-       if now - easyBounceLast < 0.25 then
-          return
-       end
-       easyBounceLast = now
-       wasAirborne = false
- 
-    humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-    local horizVelocity = moveDir.Unit * easyBouncePower
-    -- use easyBouncePower for vertical boost so slider controls height
-    hrp.Velocity = Vector3.new(horizVelocity.X, easyBouncePower, horizVelocity.Z)
-
-    doLegacyLegMove(char)
-       end)
- end
- 
  local easyBounceKeybind = Tab:CreateKeybind({
     Name = "Easy bounce key",
     CurrentKeybind = easyBounceToggleKey,
@@ -1198,8 +1148,13 @@ local Button = Tab:CreateButton({
     Flag = "WantedEmote",
     Callback = function(Text)
     wantedEmote = Text
-    -- 保留原本呼叫伺服器的邏輯
-    game:GetService("ReplicatedStorage").Remotes.PlayEmote:FireServer(Text)
+     -- 保留原本呼叫伺服器的邏輯（安全调用）
+     pcall(function()
+         local remotes = game:GetService("ReplicatedStorage"):FindFirstChild("Remotes")
+         if remotes and remotes:FindFirstChild("PlayEmote") then
+             remotes.PlayEmote:FireServer(Text)
+         end
+     end)
     print ("wanted emote: " .. Text)
     end,
  })
@@ -1553,6 +1508,68 @@ local Button = Tab:CreateButton({
           else
              Rayfield:Notify({Title = "Map Loader", Content = err, Duration = 4})
           end
+        -- EASY BOUNCE: variables and helper functions (ensure UI buttons work)
+        local easyBounceEnabled = false
+        local easyBounceConnection = nil
+        local easyBounceToggleKey = "H"
+        local easyBounceLast = 0
+        local easyBouncePower = 150
+
+        local function doLegacyLegMove(character)
+            if not character then return end
+            local hip = character:FindFirstChild("HumanoidRootPart")
+            if not hip then return end
+            -- simple visual: briefly nudge the hips CFrame to simulate leg twitch
+            local original = hip.CFrame
+            spawn(function()
+                for i=1,6 do
+                    hip.CFrame = hip.CFrame * CFrame.Angles(0.05,0,0)
+                    task.wait(0.02)
+                end
+                hip.CFrame = original
+            end)
+        end
+
+        local function easyBounceToggle(enable)
+            easyBounceEnabled = not not enable
+            if easyBounceConnection then
+                easyBounceConnection:Disconnect()
+                easyBounceConnection = nil
+            end
+            if not easyBounceEnabled then
+                Rayfield:Notify({Title = "Easy Bounce", Content = "Disabled", Duration = 2})
+                return
+            end
+
+            local Players = game:GetService("Players")
+            local player = Players.LocalPlayer
+            local function attachCharacter(char)
+                local humanoid = char:WaitForChild("Humanoid")
+                humanoid.StateChanged:Connect(function(old, new)
+                    if not easyBounceEnabled then return end
+                    if new == Enum.HumanoidStateType.Landed or new == Enum.HumanoidStateType.Running then
+                        local hrp = char:FindFirstChild("HumanoidRootPart")
+                        if humanoid and hrp then
+                            local moveDir = humanoid.MoveDirection
+                            if moveDir.Magnitude > 0.2 then
+                                local horiz = moveDir.Unit * easyBouncePower
+                                hrp.Velocity = Vector3.new(horiz.X, easyBouncePower, horiz.Z)
+                                doLegacyLegMove(char)
+                            end
+                        end
+                    end
+                end)
+            end
+
+            easyBounceConnection = player.CharacterAdded:Connect(function(char)
+                attachCharacter(char)
+            end)
+
+            if player.Character then
+                attachCharacter(player.Character)
+            end
+            Rayfield:Notify({Title = "Easy Bounce", Content = "Enabled", Duration = 2})
+        end
        end,
     })
  end
@@ -1817,6 +1834,44 @@ local Button = Tab:CreateButton({
 
 
 loadstring(game:HttpGet("https://raw.githubusercontent.com/E5alR9/E5s/refs/heads/main/donwedslide"))()
+
+-- Dynamically list available maps from common folders
+local function getMapsFolder()
+    return game:GetService("ReplicatedStorage"):FindFirstChild("Maps")
+        or workspace:FindFirstChild("Maps")
+        or game:GetService("ReplicatedStorage"):FindFirstChild("Game")
+end
+
+local mapsListed = false
+local function listAvailableMaps()
+    if mapsListed then return end
+    local mf = getMapsFolder()
+    if not mf then return end
+    local section = Tab:CreateSection("Available Maps")
+    for _,m in ipairs(mf:GetChildren()) do
+        if m:IsA("Model") or m:IsA("Folder") then
+            Tab:CreateButton({
+                Name = "Load "..m.Name,
+                Callback = function()
+                    local clone = m:Clone()
+                    clone.Name = "SpawnedMap"
+                    for _,existing in ipairs(workspace:GetChildren()) do
+                        if existing.Name == "SpawnedMap" then existing:Destroy() end
+                    end
+                    clone.Parent = workspace
+                    if clone:IsA("Model") then
+                        clone:PivotTo(CFrame.new(0,0,0))
+                    end
+                    Rayfield:Notify({Title = "Map", Content = m.Name.." loaded", Duration = 3})
+                end,
+            })
+        end
+    end
+    mapsListed = true
+end
+
+-- Populate available maps once when tab created
+listAvailableMaps()
 
 
 
