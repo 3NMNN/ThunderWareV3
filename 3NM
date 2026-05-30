@@ -48,7 +48,7 @@
  local airStrafeConnection = nil
 
  local Slider = Tab:CreateSlider({
-    Name = "Air strafe speed",
+    Name = "Virtual strafe",
     Range = {1, 700},
     Increment = 1,
     Suffix = "speed",
@@ -61,7 +61,7 @@
  })
  
  local AirStrafeToggle = Tab:CreateToggle({
-   Name = "Air strafe acceleration",
+   Name = "Virtual strafe",
    CurrentValue = airStrafeEnabled,
    Flag = "AirStrafeAccel",
    Callback = function(Value)
