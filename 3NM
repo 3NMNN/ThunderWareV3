@@ -431,6 +431,10 @@ local easyBounceToggle = function(enable)
     hrp.Velocity = Vector3.new(horizVelocity.X, easyBouncePower, horizVelocity.Z)
 
     doLegacyLegMove(char)
+       end)
+ end
+ 
+ local easyBounceKeybind = Tab:CreateKeybind({
     Name = "Easy bounce key",
     CurrentKeybind = easyBounceToggleKey,
     HoldToInteract = false,
