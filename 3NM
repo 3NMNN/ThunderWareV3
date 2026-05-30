@@ -42,6 +42,11 @@
  local Tab = Window:CreateTab("Main", nil) -- Title, Image
  local Section = Tab:CreateSection("movement")
  
+ -- Air strafe variables
+ local airStrafeSpeed = 16
+ local airStrafeEnabled = false
+ local airStrafeConnection = nil
+
  local Slider = Tab:CreateSlider({
     Name = "Air strafe speed",
     Range = {1, 700},
@@ -50,26 +55,110 @@
     CurrentValue = 16,
     Flag = "Speed", -- A flag is the identifier for the configuration file; make sure every element has a different flag if you're using configuration saving to ensure no overlaps
     Callback = function(Value)
+    airStrafeSpeed = Value
     game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = Value
-    game.Players.LocalPlayer.Character.HumanoidRootPart.Velocity = Vector3.new(Value, game.Players.LocalPlayer.Character.HumanoidRootPart.Velocity.y, Value)
     end,
  })
  
- local Slider = Tab:CreateSlider({
-    Name = "Virtual strafe",
-    Range = {0, 2000},
-    Increment = 1,
-    Suffix = "strafe",
-    CurrentValue = 16,
-    Flag = "VirtualStrafeSetting", -- A flag is the identifier for the configuration file; make sure every element has a different flag if you're using configuration saving to ensure no overlaps
-    Callback = function(Value)
-     game.Players.LocalPlayer.Character.HumanoidRootPart.Velocity = Vector3.new(Value, game.Players.LocalPlayer.Character.HumanoidRootPart.Velocity.y, Value)
- 
-    end,
- })
+ local AirStrafeToggle = Tab:CreateToggle({
+   Name = "Air strafe acceleration",
+   CurrentValue = airStrafeEnabled,
+   Flag = "AirStrafeAccel",
+   Callback = function(Value)
+      airStrafeEnabled = Value
+      
+      if airStrafeConnection then
+         airStrafeConnection:Disconnect()
+         airStrafeConnection = nil
+      end
+      
+      if not airStrafeEnabled then
+         print("Air strafe disabled")
+         return
+      end
+      
+      local RunService = game:GetService("RunService")
+      local player = game.Players.LocalPlayer
+      local mouse = player:GetMouse()
+      
+      airStrafeConnection = RunService.RenderStepped:Connect(function()
+         local character = player.Character
+         if not character then
+            return
+         end
+         
+         local hrp = character:FindFirstChild("HumanoidRootPart")
+         if not hrp then
+            return
+         end
+         
+         local mouseTarget = mouse.Hit and mouse.Hit.Position
+         if not mouseTarget then
+            return
+         end
+         
+         local playerPos = hrp.Position
+         local moveDir = Vector3.new(mouseTarget.X - playerPos.X, 0, mouseTarget.Z - playerPos.Z)
+         
+         if moveDir.Magnitude > 0 then
+            moveDir = moveDir.Unit
+            hrp.Velocity = Vector3.new(
+               moveDir.X * airStrafeSpeed,
+               hrp.Velocity.Y,
+               moveDir.Z * airStrafeSpeed
+            )
+         end
+      end)
+      
+      print("Air strafe enabled - Camera based movement active")
+   end,
+})
+
+
  
  local Section = Tab:CreateSection("Other")
- 
+
+
+ local Toggle = Tab:CreateToggle({
+   Name = "Fast turn emote",
+   CurrentValue = false,
+   Flag = "Toggle1", -- A flag is the identifier for the configuration file; make sure every element has a different flag if you're using configuration saving to ensure no overlaps
+   Callback = function(Value)
+   local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+
+local TURN_SPEED = 18 -- higher = faster turning
+
+local function setupCharacter(character)
+	local humanoid = character:WaitForChild("Humanoid")
+	local root = character:WaitForChild("HumanoidRootPart")
+
+	RunService.RenderStepped:Connect(function(dt)
+		if humanoid.MoveDirection.Magnitude > 0 then
+			local moveDir = humanoid.MoveDirection
+
+			local targetCF = CFrame.lookAt(
+				root.Position,
+				root.Position + Vector3.new(moveDir.X, 0, moveDir.Z)
+			)
+
+			root.CFrame = root.CFrame:Lerp(
+				targetCF,
+				math.clamp(TURN_SPEED * dt, 0, 1)
+			)
+		end
+	end)
+end
+
+if player.Character then
+	setupCharacter(player.Character)
+end
+
+player.CharacterAdded:Connect(setupCharacter)
+   end,
+})
  
  local Toggle = Tab:CreateToggle({
     Name = "Bounce Spot Visualizer",
@@ -195,7 +284,7 @@
  
              createESP(part)
  
-             count += 1
+             count = count + 1
          end
      end
  end
@@ -703,28 +792,28 @@ local RevertCactusButton = Tab:CreateButton({
  
              -- NORMAL MOVEMENT
              if UIS:IsKeyDown(Enum.KeyCode.W) then
-                 moveDir += cam.CFrame.LookVector
+                 moveDir = moveDir + cam.CFrame.LookVector
              end
  
              if UIS:IsKeyDown(Enum.KeyCode.S) then
-                 moveDir -= cam.CFrame.LookVector
+                 moveDir = moveDir - cam.CFrame.LookVector
              end
  
              if UIS:IsKeyDown(Enum.KeyCode.A) then
-                 moveDir -= cam.CFrame.RightVector
+                 moveDir = moveDir - cam.CFrame.RightVector
              end
  
              if UIS:IsKeyDown(Enum.KeyCode.D) then
-                 moveDir += cam.CFrame.RightVector
+                 moveDir = moveDir + cam.CFrame.RightVector
              end
  
              -- UP / DOWN
              if up then
-                 moveDir += Vector3.new(0,1,0)
+                 moveDir = moveDir + Vector3.new(0,1,0)
              end
  
              if down then
-                 moveDir -= Vector3.new(0,1,0)
+                 moveDir = moveDir - Vector3.new(0,1,0)
              end
  
              if moveDir.Magnitude > 0 then
@@ -842,19 +931,19 @@ local RevertCactusButton = Tab:CreateButton({
          local moveDir = Vector3.zero
  
          if UIS:IsKeyDown(Enum.KeyCode.W) then
-             moveDir += cam.CFrame.LookVector
+             moveDir = moveDir + cam.CFrame.LookVector
          end
  
          if UIS:IsKeyDown(Enum.KeyCode.S) then
-             moveDir -= cam.CFrame.LookVector
+             moveDir = moveDir - cam.CFrame.LookVector
          end
  
          if UIS:IsKeyDown(Enum.KeyCode.A) then
-             moveDir -= cam.CFrame.RightVector
+             moveDir = moveDir - cam.CFrame.RightVector
          end
  
          if UIS:IsKeyDown(Enum.KeyCode.D) then
-             moveDir += cam.CFrame.RightVector
+             moveDir = moveDir + cam.CFrame.RightVector
          end
  
          moveDir = Vector3.new(moveDir.X, 0, moveDir.Z)
@@ -935,19 +1024,19 @@ local RevertCactusButton = Tab:CreateButton({
  
          -- MOVEMENT
          if UIS:IsKeyDown(Enum.KeyCode.W) then
-             moveDir += cam.CFrame.LookVector
+             moveDir = moveDir + cam.CFrame.LookVector
          end
  
          if UIS:IsKeyDown(Enum.KeyCode.S) then
-             moveDir -= cam.CFrame.LookVector
+             moveDir = moveDir - cam.CFrame.LookVector
          end
  
          if UIS:IsKeyDown(Enum.KeyCode.A) then
-             moveDir -= cam.CFrame.RightVector
+             moveDir = moveDir - cam.CFrame.RightVector
          end
  
          if UIS:IsKeyDown(Enum.KeyCode.D) then
-             moveDir += cam.CFrame.RightVector
+             moveDir = moveDir + cam.CFrame.RightVector
          end
  
          moveDir = Vector3.new(moveDir.X, 0, moveDir.Z)
@@ -1024,19 +1113,19 @@ local RevertCactusButton = Tab:CreateButton({
          local dashDir = Vector3.zero
  
          if UIS:IsKeyDown(Enum.KeyCode.W) then
-             dashDir += cam.CFrame.LookVector
+             dashDir = dashDir + cam.CFrame.LookVector
          end
  
          if UIS:IsKeyDown(Enum.KeyCode.S) then
-             dashDir -= cam.CFrame.LookVector
+             dashDir = dashDir - cam.CFrame.LookVector
          end
  
          if UIS:IsKeyDown(Enum.KeyCode.A) then
-             dashDir -= cam.CFrame.RightVector
+             dashDir = dashDir - cam.CFrame.RightVector
          end
  
          if UIS:IsKeyDown(Enum.KeyCode.D) then
-             dashDir += cam.CFrame.RightVector
+             dashDir = dashDir + cam.CFrame.RightVector
          end
  
          -- FORWARD DASH IF NO KEYS
