@@ -1322,131 +1322,240 @@ local Button = Tab:CreateButton({
  
  
  
- local Section = Tab:CreateSection("Custom map loader")
+ local Section = Tab:CreateSection("Map Loader")
  
  local InsertService = game:GetService("InsertService")
  local Players = game:GetService("Players")
  
- local player = Players.LocalPlayer
- 
  local mapIdInput = ""
+ local mapScaleValue = 10
+ local mapSpawnHeightValue = 15
+ 
+ local function getMapScale()
+    return math.max(0.1, mapScaleValue / 10)
+ end
+ 
+ local function getMapSpawnHeight()
+    return mapSpawnHeightValue * 100
+ end
+ 
+ local function clearSpawnedMap()
+    local existing = workspace:FindFirstChild("SpawnedMap")
+    if existing then
+       existing:Destroy()
+    end
+ end
+ 
+ local function positionModelUnderPlayer(model, player)
+    if not model or not player or not player.Character then
+       return
+    end
+    local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+    if not hrp then
+       return
+    end
+    local ok, bboxCFrame, bboxSize = pcall(function()
+       return model:GetBoundingBox()
+    end)
+    if not ok or not bboxCFrame or not bboxSize then
+       return
+    end
+    local targetY = hrp.Position.Y + getMapSpawnHeight() - bboxSize.Y / 2
+    local offset = Vector3.new(hrp.Position.X, targetY, hrp.Position.Z) - bboxCFrame.Position
+    for _, part in ipairs(model:GetDescendants()) do
+       if part:IsA("BasePart") then
+          part.CFrame = part.CFrame + offset
+       end
+    end
+ end
+ 
+ local function scaleModel(model, scale)
+    if not model or scale == 1 then
+       return
+    end
+    local ok, bboxCFrame = pcall(function()
+       return model:GetBoundingBox()
+    end)
+    if not ok or not bboxCFrame then
+       return
+    end
+    for _, part in ipairs(model:GetDescendants()) do
+       if part:IsA("BasePart") then
+          local orientation = part.CFrame - part.Position
+          local relativePos = bboxCFrame:PointToObjectSpace(part.Position)
+          part.Size = part.Size * scale
+          local newPos = bboxCFrame.Position + relativePos * scale
+          part.CFrame = CFrame.new(newPos) * orientation
+       end
+    end
+ end
+ 
+ local function createMapModelFromAsset(asset)
+    for _, obj in ipairs(asset:GetChildren()) do
+       if obj:IsA("Model") then
+          return obj
+       end
+    end
+    for _, obj in ipairs(asset:GetChildren()) do
+       if obj:IsA("BasePart") then
+          local model = Instance.new("Model")
+          obj.Parent = model
+          return model
+       end
+    end
+    return nil
+ end
+ 
+ local function loadMapAssetById(mapId)
+    local ok, asset = pcall(function()
+       return InsertService:LoadAsset(mapId)
+    end)
+    if not ok or not asset then
+       return nil, "Failed to load asset"
+    end
+    local model = createMapModelFromAsset(asset)
+    if not model then
+       return nil, "No valid model found in asset"
+    end
+    return model
+ end
+ 
+ local function findMapByName(mapName)
+    local searchParents = {
+       game:GetService("ReplicatedStorage"),
+       workspace,
+       game:GetService("ServerStorage"),
+    }
+    for _, parent in ipairs(searchParents) do
+       if parent then
+          local found = parent:FindFirstChild(mapName, true)
+          if found then
+             return found
+          end
+       end
+    end
+    return nil
+ end
+ 
+ local function spawnMap(model, player)
+    if not model then
+       return false, "No map model"
+    end
+    clearSpawnedMap()
+    model.Name = "SpawnedMap"
+    model.Parent = workspace
+    local scale = getMapScale()
+    scaleModel(model, scale)
+    positionModelUnderPlayer(model, player)
+    return true
+ end
+ 
+ local function loadMapFromAssetId(mapId)
+    local player = Players.LocalPlayer
+    if not player or not player.Character then
+       return false, "Player not ready"
+    end
+    local model, err = loadMapAssetById(mapId)
+    if not model then
+       return false, err
+    end
+    return spawnMap(model, player)
+ end
+ 
+ local function loadPresetMap(mapName)
+    local player = Players.LocalPlayer
+    if not player or not player.Character then
+       return false, "Player not ready"
+    end
+    local source = findMapByName(mapName)
+    if not source then
+       return false, "Preset map not found: " .. mapName
+    end
+    local clone = source:Clone()
+    return spawnMap(clone, player)
+ end
  
  local Input = Tab:CreateInput({
-    Name = "Map ID",
+    Name = "Map Asset ID",
     CurrentValue = "",
     PlaceholderText = "Enter asset ID",
     RemoveTextAfterFocusLost = false,
     Flag = "MapIdInput",
- 
     Callback = function(Text)
        mapIdInput = Text
     end,
  })
  
-local ApplyMapButton = Tab:CreateButton({
-    Name = "Apply map",
-    Callback = function()
-       local player = Players.LocalPlayer
-       if not player or not player.Character then
-          Rayfield:Notify({Title = "Error", Content = "Player not ready", Duration = 3})
-          return
-       end
-
-       local hrp = player.Character:FindFirstChild("HumanoidRootPart")
-       if not hrp then
-          Rayfield:Notify({Title = "Error", Content = "HumanoidRootPart not found", Duration = 3})
-          return
-       end
-
-       if not mapIdInput or mapIdInput == "" then
-          Rayfield:Notify({Title = "Error", Content = "Please enter a map ID", Duration = 3})
-          return
-       end
-
-       local id = tonumber(mapIdInput) or tonumber(tostring(mapIdInput):match("(%d+)"))
-       if not id then
-          Rayfield:Notify({Title = "Error", Content = "Invalid map ID format", Duration = 3})
-          return
-       end
-
-       -- Teleport player high so the map will spawn beneath them
-       hrp.CFrame = CFrame.new(hrp.Position.X, hrp.Position.Y + 500, hrp.Position.Z)
-       Rayfield:Notify({Title = "Map", Content = "Loading map...", Duration = 2})
-
-       local ok, asset = pcall(function()
-          return InsertService:LoadAsset(id)
-       end)
-
-       if not ok or not asset then
-          Rayfield:Notify({Title = "Error", Content = "Failed to load asset: " .. tostring(asset), Duration = 5})
-          return
-       end
-
-       -- Find the main model
-       local mapModel = nil
-       for _, obj in ipairs(asset:GetChildren()) do
-          if obj:IsA("Model") then
-             mapModel = obj
-             break
-          end
-       end
-
-       if not mapModel then
-          -- Try to find BasePart
-          for _, obj in ipairs(asset:GetChildren()) do
-             if obj:IsA("BasePart") then
-                mapModel = Instance.new("Model")
-                obj.Parent = mapModel
-                break
-             end
-          end
-       end
-
-       if not mapModel then
-          Rayfield:Notify({Title = "Error", Content = "No valid model found in asset", Duration = 3})
-          return
-       end
-
-       mapModel.Name = "SpawnedMap"
-       local existingSpawn = workspace:FindFirstChild("SpawnedMap")
-       if existingSpawn then
-          existingSpawn:Destroy()
-       end
-       mapModel.Parent = workspace
-
-       -- Position map below player
-       local successBBox, bboxCFrame, bboxSize = pcall(function()
-          return mapModel:GetBoundingBox()
-       end)
-
-       if successBBox and bboxCFrame and bboxSize then
-          local topHalf = bboxSize.Y / 2
-          local targetY = hrp.Position.Y - 5 - topHalf
-          local offset = Vector3.new(0, targetY - bboxCFrame.Position.Y, 0)
-          for _, part in ipairs(mapModel:GetDescendants()) do
-             if part:IsA("BasePart") then
-                part.CFrame = part.CFrame + offset
-             end
-          end
-       end
-
-       Rayfield:Notify({Title = "Success", Content = "Map loaded successfully!", Duration = 3})
-    end
+ local ScaleSlider = Tab:CreateSlider({
+    Name = "Scale Factor (/10)",
+    Range = {1, 100},
+    Increment = 1,
+    Suffix = "x",
+    CurrentValue = 10,
+    Flag = "MapScaleFactor",
+    Callback = function(Value)
+       mapScaleValue = Value
+    end,
  })
  
+ local HeightSlider = Tab:CreateSlider({
+    Name = "Spawn Height (/100)",
+    Range = {0, 100},
+    Increment = 1,
+    Suffix = "0s",
+    CurrentValue = 15,
+    Flag = "MapSpawnHeight",
+    Callback = function(Value)
+       mapSpawnHeightValue = Value
+    end,
+ })
  
+ local LoadMapButton = Tab:CreateButton({
+    Name = "Load Map",
+    Callback = function()
+       local mapId = tonumber(mapIdInput) or tonumber(tostring(mapIdInput):match("(%d+)"))
+       if not mapId then
+          Rayfield:Notify({Title = "Map Loader", Content = "Invalid map ID", Duration = 4})
+          return
+       end
+       local success, err = loadMapFromAssetId(mapId)
+       if success then
+          Rayfield:Notify({Title = "Map Loader", Content = "Map loaded successfully", Duration = 3})
+       else
+          Rayfield:Notify({Title = "Map Loader", Content = err, Duration = 4})
+       end
+    end,
+ })
  
+ local SectionPresets = Tab:CreateSection("Custom Maps Loader")
  
+ local presetMaps = {
+    "NN_Russia",
+    "NN_Outpost",
+    "NN_Shibuya",
+    "NN_Mall",
+    "NN_Crossroads",
+    "NN_BigMaze",
+    "NN_Outpost V2",
+    "NN_LostRuins",
+    "NN_HappyHome",
+    "FrostYear Peaks",
+    "Plague Square",
+ }
  
- 
- 
- 
-
-
-
-
-
-
+ for _, preset in ipairs(presetMaps) do
+    Tab:CreateButton({
+       Name = "Load " .. preset,
+       Callback = function()
+          local success, err = loadPresetMap(preset)
+          if success then
+             Rayfield:Notify({Title = "Map Loader", Content = preset .. " loaded", Duration = 3})
+          else
+             Rayfield:Notify({Title = "Map Loader", Content = err, Duration = 4})
+          end
+       end,
+    })
+ end
 local Section = Tab:CreateSection("Emote swapper")
 
 local Input = Tab:CreateInput({
