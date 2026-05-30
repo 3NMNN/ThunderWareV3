@@ -341,10 +341,39 @@ local easyBounceEnabled = false
 local easyBounceConnection = nil
 local easyBounceLast = 0
 local easyBouncePower = 150
- local easyBounceToggleKey = "H"
- local easyBounceBindConnection = nil
- 
- local easyBounceToggle = function(enable)
+local easyBounceToggleKey = "H"
+local easyBounceBindConnection = nil
+
+local function doLegacyLegMove(character)
+    if not character then
+        return
+    end
+
+    local originals = {}
+    local function rotateJoint(name, angle)
+        local joint = character:FindFirstChild(name)
+        if joint and joint:IsA("Motor6D") then
+            originals[name] = joint.C0
+            joint.C0 = joint.C0 * CFrame.Angles(angle, 0, 0)
+        end
+    end
+
+    rotateJoint("LeftHip", -0.8)
+    rotateJoint("RightHip", -0.8)
+    rotateJoint("Left Hip", -0.8)
+    rotateJoint("Right Hip", -0.8)
+
+    task.delay(0.12, function()
+        for name, original in pairs(originals) do
+            local joint = character:FindFirstChild(name)
+            if joint and joint:IsA("Motor6D") and original then
+                joint.C0 = original
+            end
+        end
+    end)
+end
+
+local easyBounceToggle = function(enable)
     easyBounceEnabled = enable
     print("Easy bounce " .. (easyBounceEnabled and "enabled" or "disabled"))
  
@@ -400,10 +429,8 @@ local easyBouncePower = 150
     local horizVelocity = moveDir.Unit * easyBouncePower
     -- use easyBouncePower for vertical boost so slider controls height
     hrp.Velocity = Vector3.new(horizVelocity.X, easyBouncePower, horizVelocity.Z)
-    end)
- end
- 
- local easyBounceKeybind = Tab:CreateKeybind({
+
+    doLegacyLegMove(char)
     Name = "Easy bounce key",
     CurrentKeybind = easyBounceToggleKey,
     HoldToInteract = false,
